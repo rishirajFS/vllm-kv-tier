@@ -268,6 +268,26 @@ class OffloadingConnectorScheduler:
         self._reqs_being_stored = defaultdict[ReqId, set[BlockHash]](set)
         self._reqs_being_loaded = defaultdict[ReqId, set[BlockHash]](set)
 
+        # Optional prefetcher for predictive CPU->GPU transfers
+        self._prefetcher = None
+        extra_config = spec.extra_config if hasattr(spec, "extra_config") else {}
+        if extra_config.get("enable_prefetching", False):
+            try:
+                from vllm.v1.kv_offload.prefetcher import SequentialPrefetcher
+                lookahead = int(extra_config.get("prefetch_lookahead", 2))
+                max_pending = int(extra_config.get("prefetch_max_pending", 8))
+                self._prefetcher = SequentialPrefetcher(
+                    lookahead=lookahead,
+                    max_pending=max_pending,
+                    cooldown_seconds=0.05,
+                )
+                logger.info(
+                    "Prefetcher enabled: lookahead=%d, max_pending=%d",
+                    lookahead, max_pending,
+                )
+            except Exception:
+                logger.warning("Failed to initialize prefetcher", exc_info=True)
+
     def _get_block_hashes(
         self,
         req: Request,
@@ -309,6 +329,18 @@ class OffloadingConnectorScheduler:
         block_hashes = self._get_block_hashes(request)
 
         self.manager.touch(block_hashes)
+
+        # Record block accesses for prefetcher pattern tracking
+        if self._prefetcher is not None:
+            try:
+                accessed = list(
+                    self._get_block_hashes(request)
+                )
+                self._prefetcher.record_access(
+                    request.request_id, accessed
+                )
+            except Exception:
+                pass  # Non-critical
 
         full_block_tokens = self.offloaded_block_size * num_blocks
         if full_block_tokens - num_computed_tokens < self.offloaded_block_size:
@@ -475,9 +507,32 @@ class OffloadingConnectorScheduler:
     def build_connector_meta(
         self, scheduler_output: SchedulerOutput
     ) -> KVConnectorMetadata:
+        reqs_to_store = self._get_reqs_to_store(scheduler_output)
+
+        # Trigger prefetch predictions for active requests
+        if self._prefetcher is not None:
+            try:
+                offloaded_blocks = self.manager.get_offloaded_blocks() \
+                    if hasattr(self.manager, "get_offloaded_blocks") else set()
+                for req_id in scheduler_output.num_scheduled_tokens:
+                    req = self._requests.get(req_id)
+                    if req is None:
+                        continue
+                    current = list(self._get_block_hashes(req))
+                    predictions = self._prefetcher.predict(
+                        req_id, current, offloaded_blocks,
+                    )
+                    for pred in predictions:
+                        logger.debug(
+                            "Prefetch predicted block %s for req %s",
+                            pred.block_hash, req_id,
+                        )
+            except Exception:
+                pass  # Non-critical
+
         meta = OffloadingConnectorMetadata(
             reqs_to_load=self._reqs_to_load,
-            reqs_to_store=self._get_reqs_to_store(scheduler_output),
+            reqs_to_store=reqs_to_store,
         )
         self._reqs_to_load = {}
 
@@ -511,6 +566,35 @@ class OffloadingConnectorScheduler:
                     self._blocks_being_loaded.difference_update(block_hashes)
                 self.manager.complete_load(block_hashes)
 
+        # Forward attention scores to the offloading manager if available.
+        # This enables attention-aware and hybrid eviction policies.
+        if (
+            connector_output.attention_block_scores
+            and hasattr(self.manager, "update_attention_scores")
+        ):
+            try:
+                from vllm.v1.kv_offload.score_estimator import (
+                    map_scores_to_block_hashes,
+                )
+                # Build req_id -> block_hashes mapping from tracked requests
+                request_block_hashes = {}
+                for req_id in connector_output.attention_block_scores:
+                    req = self._requests.get(req_id)
+                    if req is not None:
+                        request_block_hashes[req_id] = list(
+                            self._get_block_hashes(req)
+                        )
+                if request_block_hashes:
+                    aggregated = map_scores_to_block_hashes(
+                        connector_output.attention_block_scores,
+                        request_block_hashes,
+                        block_size_factor=self.block_size_factor,
+                    )
+                    if aggregated:
+                        self.manager.update_attention_scores(aggregated)
+            except Exception:
+                pass  # Non-critical: don't block scheduling
+
     def request_finished(
         self,
         request: Request,
@@ -530,6 +614,13 @@ class OffloadingConnectorScheduler:
         self._requests.pop(req_id, None)
         self._request_block_ids.pop(req_id, None)
         self._next_stored_block_idx.pop(req_id, None)
+
+        # Clean up prefetcher state for finished request
+        if self._prefetcher is not None:
+            try:
+                self._prefetcher.remove_request(req_id)
+            except Exception:
+                pass
 
         request_being_stored = req_id in self._reqs_being_stored
         return request_being_stored, None

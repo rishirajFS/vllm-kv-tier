@@ -10,7 +10,11 @@ from vllm.v1.attention.backend import AttentionBackend
 from vllm.v1.kv_cache_interface import KVCacheConfig
 from vllm.v1.kv_offload.abstract import LoadStoreSpec, OffloadingManager
 from vllm.v1.kv_offload.arc_manager import ARCOffloadingManager
+from vllm.v1.kv_offload.attention_manager import (
+    AttentionWeightedOffloadingManager,
+)
 from vllm.v1.kv_offload.backends.cpu import CPUBackend
+from vllm.v1.kv_offload.hybrid_manager import HybridOffloadingManager
 from vllm.v1.kv_offload.lru_manager import LRUOffloadingManager
 from vllm.v1.kv_offload.mediums import CPULoadStoreSpec, GPULoadStoreSpec
 from vllm.v1.kv_offload.spec import OffloadingSpec
@@ -78,10 +82,40 @@ class CPUOffloadingSpec(OffloadingSpec):
                 self._manager = ARCOffloadingManager(
                     backend=backend, enable_events=enable_events
                 )
+            elif self.eviction_policy == "attention":
+                score_decay = float(
+                    self.extra_config.get("score_decay", 0.95)
+                )
+                self._manager = AttentionWeightedOffloadingManager(
+                    backend=backend,
+                    enable_events=enable_events,
+                    score_decay=score_decay,
+                )
+            elif self.eviction_policy == "hybrid":
+                alpha = float(
+                    self.extra_config.get("attention_weight", 0.5)
+                )
+                beta = float(
+                    self.extra_config.get("recency_weight", 0.3)
+                )
+                gamma = float(
+                    self.extra_config.get("frequency_weight", 0.2)
+                )
+                score_decay = float(
+                    self.extra_config.get("score_decay", 0.95)
+                )
+                self._manager = HybridOffloadingManager(
+                    backend=backend,
+                    enable_events=enable_events,
+                    alpha=alpha,
+                    beta=beta,
+                    gamma=gamma,
+                    score_decay=score_decay,
+                )
             else:
                 raise ValueError(
                     f"Unknown eviction policy: {self.eviction_policy}. "
-                    f"Supported policies: lru, arc"
+                    f"Supported policies: lru, arc, attention, hybrid"
                 )
         return self._manager
 
