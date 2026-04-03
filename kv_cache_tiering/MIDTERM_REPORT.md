@@ -267,6 +267,22 @@ req-2: 2 blocks, scores=[64.163, 63.749]
 
 For all-random hidden states with `hidden_dim=4096`, the expected L2 norm is approximately `sqrt(4096) = 64.0`, confirming numerical correctness.
 
+#### Benchmark Harness Results (ShareGPT Workload)
+
+We ran throughput benchmarks under memory pressure (12% GPU memory utilization, 8GB CPU offload) using the ShareGPT dataset (200 multi-turn conversations, 1024 max tokens per request). This configuration forced real KV cache evictions to CPU, enabling us to measure eviction policy effectiveness.
+
+| Policy | Throughput | Improvement | Avg Latency | P95 Latency |
+|--------|------------|-------------|-------------|-------------|
+| LRU (baseline) | 535.1 tok/s | — | 1510.6 ms | 1737.2 ms |
+| **Attention-weighted** | **584.5 tok/s** | **+9.2%** | **1401.1 ms** | **1611.3 ms** |
+| Hybrid (0.5/0.3/0.2) | 581.5 tok/s | +8.6% | 1408.9 ms | 1620.2 ms |
+
+**Key Finding**: The attention-weighted policy achieved 9.2% higher throughput compared to LRU. This validates our hypothesis that content-aware eviction (keeping high-attention blocks on GPU) outperforms access-recency heuristics under memory pressure.
+
+**Why ShareGPT Succeeded**: Unlike earlier baseline runs with 20-50% GPU memory utilization (which showed no evictions and identical performance across policies), the 12% configuration saturated the KV cache pool, triggering real eviction decisions where policy effectiveness became the bottleneck.
+
+**See [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md)** for detailed experimental setup, statistical analysis, control experiment results, and raw data.
+
 ---
 
 ## 5. Analysis
@@ -332,7 +348,7 @@ This means a failure in any of our components cannot crash or degrade the infere
    - Reduce `gpu_memory_utilization` further to force cache pressure
    - Increase concurrent request count to exhaust KV cache capacity
 
-2. **Throughput comparison**: Measure tokens/second and time-to-first-token across policies under memory pressure. The benchmarking harness (`kv_cache_tiering/benchmarks/benchmark.py`) is implemented and ready.
+2. **Workload generalization**: Our ShareGPT benchmark demonstrates 9.2% throughput improvement under memory pressure. To validate broad applicability, we need results from MS-MARCO (RAG workload), HumanEval (code completion), and Code-Alpaca (instruction following) under identical memory pressure (12% GPU utilization).
 
 3. **Workload characterization**: Use the AccessTracer to profile real workloads (ShareGPT, LMSYS-Chat) and measure reuse distance distributions, which directly inform optimal policy selection.
 

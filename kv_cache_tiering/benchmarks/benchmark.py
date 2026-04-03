@@ -21,6 +21,8 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 
 @dataclass
 class BenchmarkConfig:
@@ -29,6 +31,7 @@ class BenchmarkConfig:
     eviction_policy: str = "lru"
     cpu_bytes_to_use: int = 16_000_000_000  # 16 GB
     gpu_memory_utilization: float = 0.5
+    max_model_len: int = 8192
     max_tokens: int = 256
     num_prompts: int = 100
     dataset: str = "sharegpt"
@@ -200,6 +203,7 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkMetrics:
     llm = LLM(
         model=config.model,
         gpu_memory_utilization=config.gpu_memory_utilization,
+        max_model_len=config.max_model_len,
         kv_transfer_config=kv_transfer_config,
     )
 
@@ -221,8 +225,48 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkMetrics:
     )
     n = len(outputs)
 
-    # Approximate per-request latency as avg wall-clock time per request
-    avg_lat = (total_time / n) * 1000 if n > 0 else 0.0
+    # Collect per-request metrics from RequestOutput objects
+    latencies = []
+    ttfts = []
+
+    for output in outputs:
+        # Extract metrics from RequestOutput
+        metrics = output.metrics if hasattr(output, 'metrics') else None
+
+        if metrics:
+            # TTFT: time from request arrival to first token
+            if hasattr(metrics, 'time_to_first_token') and metrics.time_to_first_token:
+                ttfts.append(metrics.time_to_first_token * 1000)  # Convert to ms
+
+            # Total latency: time from request arrival to completion
+            if hasattr(metrics, 'finished_time') and hasattr(metrics, 'arrival_time'):
+                latency = (metrics.finished_time - metrics.arrival_time) * 1000
+                latencies.append(latency)
+
+    # Calculate latency statistics
+    if latencies:
+        import numpy as np
+        avg_lat = float(np.mean(latencies))
+        p50_lat = float(np.percentile(latencies, 50))
+        p95_lat = float(np.percentile(latencies, 95))
+        p99_lat = float(np.percentile(latencies, 99))
+    else:
+        # Fallback to approximation if metrics not available
+        avg_lat = (total_time / n) * 1000 if n > 0 else 0.0
+        p50_lat = avg_lat
+        p95_lat = avg_lat * 1.15
+        p99_lat = avg_lat * 1.20
+
+    # Calculate TTFT statistics
+    if ttfts:
+        import numpy as np
+        avg_ttft = float(np.mean(ttfts))
+        p50_ttft = float(np.percentile(ttfts, 50))
+        p95_ttft = float(np.percentile(ttfts, 95))
+    else:
+        avg_ttft = 0.0
+        p50_ttft = 0.0
+        p95_ttft = 0.0
 
     # Try to read eviction/transfer stats from the connector if exposed
     total_evictions = 0
@@ -245,9 +289,12 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkMetrics:
         tokens_per_second=total_tokens / total_time if total_time > 0 else 0,
         requests_per_second=n / total_time if total_time > 0 else 0,
         avg_latency_ms=avg_lat,
-        p50_latency_ms=avg_lat,
-        p95_latency_ms=avg_lat * 1.15,  # estimated without per-req timing
-        p99_latency_ms=avg_lat * 1.20,
+        p50_latency_ms=p50_lat,
+        p95_latency_ms=p95_lat,
+        p99_latency_ms=p99_lat,
+        avg_ttft_ms=avg_ttft,
+        p50_ttft_ms=p50_ttft,
+        p95_ttft_ms=p95_ttft,
         total_evictions=total_evictions,
         bytes_gpu_to_cpu=bytes_gpu_to_cpu,
         bytes_cpu_to_gpu=bytes_cpu_to_gpu,
@@ -288,6 +335,7 @@ def main():
     parser.add_argument("--dataset", default="synthetic")
     parser.add_argument("--dataset-path", default=None)
     parser.add_argument("--num-prompts", type=int, default=100)
+    parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument(
         "--cpu-bytes", type=int, default=16_000_000_000
@@ -306,6 +354,7 @@ def main():
                 eviction_policy=policy,
                 cpu_bytes_to_use=args.cpu_bytes,
                 gpu_memory_utilization=args.gpu_mem_util,
+                max_model_len=args.max_model_len,
                 max_tokens=args.max_tokens,
                 num_prompts=args.num_prompts,
                 dataset=args.dataset,

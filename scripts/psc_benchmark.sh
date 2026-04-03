@@ -30,22 +30,31 @@ pip install -e ".[dev]" -q
 echo "=========================================="
 echo "Starting KV Cache Tiering Benchmark Suite"
 echo "Model: meta-llama/Llama-3.2-1B-Instruct"
-echo "GPU Memory Utilization: 0.30 (forcing real eviction pressure)"
+echo "Dataset: ShareGPT (real multi-turn conversations)"
+echo "GPU Memory Utilization: 0.12 (forcing hard eviction pressure)"
 echo "Policies: lru, attention, hybrid"
-echo "Num prompts: 200 x 512 max tokens (synthetic)"
+echo "Num prompts: 200"
 echo "=========================================="
 
 mkdir -p ~/workspace/vllm/benchmark_results
 
+# Verify dataset exists
+if [ ! -f ~/workspace/vllm/datasets/sharegpt.json ]; then
+    echo "ERROR: ShareGPT dataset not found at ~/workspace/vllm/datasets/sharegpt.json"
+    exit 1
+fi
+
 python3 -m kv_cache_tiering.benchmarks.benchmark \
     --model meta-llama/Llama-3.2-1B-Instruct \
     --policies lru attention hybrid \
-    --dataset synthetic \
+    --dataset sharegpt \
+    --dataset-path ~/workspace/vllm/datasets/sharegpt.json \
     --num-prompts 200 \
-    --max-tokens 512 \
-    --gpu-mem-util 0.30 \
-    --cpu-bytes 4000000000 \
-    --output ~/workspace/vllm/benchmark_results/results_$(date +%Y%m%d_%H%M%S).json
+    --max-model-len 16384 \
+    --max-tokens 1024 \
+    --gpu-mem-util 0.12 \
+    --cpu-bytes 8000000000 \
+    --output ~/workspace/vllm/benchmark_results/results_sharegpt_$(date +%Y%m%d_%H%M%S).json
 
 echo "Benchmark complete! Results saved to ~/workspace/vllm/benchmark_results/"
 ls -lh ~/workspace/vllm/benchmark_results/
