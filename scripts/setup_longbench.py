@@ -59,7 +59,7 @@ def download_and_convert_task(task_name, task_info, output_dir, max_samples=200)
     try:
         # Download from Hugging Face
         print(f"Downloading {task_name} from THUDM/LongBench...")
-        dataset = load_dataset('THUDM/LongBench', task_name, split='test')
+        dataset = load_dataset('THUDM/LongBench', task_name, split='test', trust_remote_code=True)
         print(f"✅ Downloaded {len(dataset)} samples")
 
     except Exception as e:
