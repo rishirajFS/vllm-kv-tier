@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#SBATCH -A cis250224p
 #SBATCH --job-name=vllm_eval
 #SBATCH --output=vllm_eval.log
 #SBATCH -p GPU-shared

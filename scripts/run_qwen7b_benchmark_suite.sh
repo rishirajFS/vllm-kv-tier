@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#SBATCH -A cis250224p
 #SBATCH --job-name=vllm_qwen7b
 #SBATCH --output=vllm_qwen7b_suite.log
 #SBATCH -p GPU-shared

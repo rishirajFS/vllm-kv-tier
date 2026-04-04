@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#SBATCH -A cis250224p
 #SBATCH --job-name=vllm_marco
 #SBATCH --output=vllm_marco.log
 #SBATCH -p GPU-shared

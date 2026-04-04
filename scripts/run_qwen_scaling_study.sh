@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#SBATCH -A cis250224p
 #SBATCH --job-name=vllm_qwen_scaling
 #SBATCH --output=vllm_qwen_scaling_%A.log
 #SBATCH -p GPU-shared
@@ -62,8 +63,13 @@ run_model_benchmark() {
     local model_size=$1
     local model_name="Qwen/Qwen2.5-${model_size}B-Instruct"
 
+    local GPU_UTIL="0.15"
+    if [ "$model_size" == "3" ]; then GPU_UTIL="0.25"
+    elif [ "$model_size" == "7" ]; then GPU_UTIL="0.50"
+    fi
+
     echo -e "\n${BLUE}================================================================${NC}"
-    echo -e "${BLUE}  Model: $model_name${NC}"
+    echo -e "${BLUE}  Model: $model_name (GPU VRAM Bound: $GPU_UTIL)${NC}"
     echo -e "${BLUE}================================================================${NC}\n"
 
     # Run throughput benchmarks
@@ -78,7 +84,7 @@ run_model_benchmark() {
         --dataset-path "${DATASET_DIR}/sharegpt.json" \
         --num-prompts 200 \
         --max-tokens 1024 \
-        --gpu-mem-util 0.12 \
+        --gpu-mem-util $GPU_UTIL \
         --cpu-bytes 8000000000 \
         --max-model-len 32768 \
         --output "${OUTPUT_DIR}/results_qwen${model_size}b_sharegpt_$(date +%Y%m%d_%H%M%S).json" \
@@ -93,7 +99,7 @@ run_model_benchmark() {
         --dataset-path "${DATASET_DIR}/msmarco.json" \
         --num-prompts 200 \
         --max-tokens 1024 \
-        --gpu-mem-util 0.12 \
+        --gpu-mem-util $GPU_UTIL \
         --cpu-bytes 8000000000 \
         --max-model-len 32768 \
         --output "${OUTPUT_DIR}/results_qwen${model_size}b_msmarco_$(date +%Y%m%d_%H%M%S).json" \
@@ -108,7 +114,7 @@ run_model_benchmark() {
         --dataset-path "${DATASET_DIR}/humaneval.json" \
         --num-prompts 164 \
         --max-tokens 512 \
-        --gpu-mem-util 0.12 \
+        --gpu-mem-util $GPU_UTIL \
         --cpu-bytes 8000000000 \
         --max-model-len 32768 \
         --output "${OUTPUT_DIR}/results_qwen${model_size}b_humaneval_$(date +%Y%m%d_%H%M%S).json" \
@@ -121,7 +127,7 @@ run_model_benchmark() {
             --model "$model_name" \
             --output "${OUTPUT_DIR}/memory_efficiency_qwen${model_size}b.json" \
             --gpu-memory-baseline 0.9 \
-            --gpu-memory-tiered 0.12 \
+            --gpu-memory-tiered $GPU_UTIL \
             --cpu-tier-size 8000000000 \
             --start-length 2048 \
             --step-size 2048 \

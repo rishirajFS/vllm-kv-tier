@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#SBATCH -A cis250224p
 #SBATCH --job-name=vllm_long_ctx
 #SBATCH --output=vllm_long_context_%A.log
 #SBATCH -p GPU-shared
@@ -16,9 +17,12 @@ export XDG_CACHE_HOME="/jet/home/rnagaraj/workspace/vllm/xdg_cache"
 
 mkdir -p benchmark_results
 
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+
 echo "Starting Priority 3: Long-Context Stress Test (4K -> 128K)..."
 python scripts/benchmark_long_context.py \
     --model Qwen/Qwen2.5-3B-Instruct \
+    --gpu-mem-util 0.25 \
     --policies lru attention hybrid \
     --output benchmark_results/long_context_3b.json
 
