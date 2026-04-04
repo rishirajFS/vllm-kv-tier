@@ -26,15 +26,15 @@ python scripts/benchmark_memory_pressure_sweep.py \
 echo "Starting Phase 3.2: Hybrid Ablation"
 python scripts/benchmark_hybrid_ablation.py \
   --model Qwen/Qwen2.5-1.5B-Instruct \
-  --dataset sharegpt \
+  --dataset-name sharegpt \
   --num-prompts 200 \
-  --gpu-memory-utilization 0.08 \
+  --gpu-memory-utilization 0.10 \
   --output benchmark_results/hybrid_ablation_${TIMESTAMP}.json
 
 echo "Starting Phase 3.3: Failure Modes"
 python scripts/benchmark_failure_modes.py \
   --model Qwen/Qwen2.5-1.5B-Instruct \
-  --gpu-memory-utilization 0.08 \
+  --gpu-memory-utilization 0.10 \
   --output benchmark_results/failure_modes_${TIMESTAMP}.json
 
 echo "Phase 3 Complete!"

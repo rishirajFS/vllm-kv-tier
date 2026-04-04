@@ -23,7 +23,7 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 200 \
   --dataset sharegpt \
   --dataset-path datasets/sharegpt.json \
-  --gpu-mem-util 0.08 \
+  --gpu-mem-util 0.10 \
   --max-model-len 2048 \
   --output benchmark_results/results_qwen1.5b_sharegpt_fixed_${TIMESTAMP}.json
 
@@ -34,7 +34,7 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 200 \
   --dataset sharegpt \
   --dataset-path datasets/sharegpt.json \
-  --gpu-mem-util 0.12 \
+  --gpu-mem-util 0.20 \
   --max-model-len 4096 \
   --output benchmark_results/results_qwen3b_sharegpt_fixed_${TIMESTAMP}.json
 
@@ -45,7 +45,7 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 200 \
   --dataset msmarco \
   --dataset-path datasets/msmarco.json \
-  --gpu-mem-util 0.12 \
+  --gpu-mem-util 0.20 \
   --max-model-len 4096 \
   --output benchmark_results/results_qwen3b_msmarco_fixed_${TIMESTAMP}.json
 
@@ -56,7 +56,7 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 164 \
   --dataset humaneval \
   --dataset-path datasets/humaneval.json \
-  --gpu-mem-util 0.12 \
+  --gpu-mem-util 0.20 \
   --max-model-len 4096 \
   --output benchmark_results/results_qwen3b_humaneval_fixed_${TIMESTAMP}.json
 
@@ -67,7 +67,7 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 200 \
   --dataset sharegpt \
   --dataset-path datasets/sharegpt.json \
-  --gpu-mem-util 0.08 \
+  --gpu-mem-util 0.10 \
   --max-model-len 2048 \
   --output benchmark_results/results_llama1b_sharegpt_fixed_${TIMESTAMP}.json
 
