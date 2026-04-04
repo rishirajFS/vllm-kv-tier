@@ -23,8 +23,8 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 200 \
   --dataset sharegpt \
   --dataset-path datasets/sharegpt.json \
-  --gpu-mem-util 0.50 \
-  --max-model-len 2048 \
+  --gpu-mem-util 0.60 \
+  --max-model-len 4096 \
   --output benchmark_results/results_qwen7b_sharegpt_${TIMESTAMP}.json
 
 echo "Starting Phase 4.2: Qwen 7B MS-MARCO"
@@ -34,8 +34,8 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 200 \
   --dataset msmarco \
   --dataset-path datasets/msmarco.json \
-  --gpu-mem-util 0.50 \
-  --max-model-len 2048 \
+  --gpu-mem-util 0.60 \
+  --max-model-len 4096 \
   --output benchmark_results/results_qwen7b_msmarco_${TIMESTAMP}.json
 
 echo "Starting Phase 4.3: Qwen 7B HumanEval"
@@ -45,8 +45,8 @@ python -m kv_cache_tiering.benchmarks.benchmark \
   --num-prompts 164 \
   --dataset humaneval \
   --dataset-path datasets/humaneval.json \
-  --gpu-mem-util 0.50 \
-  --max-model-len 2048 \
+  --gpu-mem-util 0.60 \
+  --max-model-len 4096 \
   --output benchmark_results/results_qwen7b_humaneval_${TIMESTAMP}.json
 
 echo "Phase 4 Complete!"
