@@ -70,17 +70,23 @@ class CPUOffloadingSpec(OffloadingSpec):
                 kv_events_config is not None and kv_events_config.enable_kv_cache_events
             )
 
+            # Enable eviction logging for visualization/instrumentation
+            log_evictions = bool(self.extra_config.get("log_evictions", False))
+
             backend = CPUBackend(
                 block_size=self.offloaded_block_size, num_blocks=self.num_blocks
             )
 
             if self.eviction_policy == "lru":
                 self._manager = LRUOffloadingManager(
-                    backend=backend, enable_events=enable_events
+                    backend=backend,
+                    enable_events=enable_events,
+                    log_evictions=log_evictions,
                 )
             elif self.eviction_policy == "arc":
                 self._manager = ARCOffloadingManager(
-                    backend=backend, enable_events=enable_events
+                    backend=backend,
+                    enable_events=enable_events
                 )
             elif self.eviction_policy == "attention":
                 score_decay = float(
@@ -90,6 +96,7 @@ class CPUOffloadingSpec(OffloadingSpec):
                     backend=backend,
                     enable_events=enable_events,
                     score_decay=score_decay,
+                    log_evictions=log_evictions,
                 )
             elif self.eviction_policy == "hybrid":
                 alpha = float(
@@ -111,6 +118,7 @@ class CPUOffloadingSpec(OffloadingSpec):
                     beta=beta,
                     gamma=gamma,
                     score_decay=score_decay,
+                    log_evictions=log_evictions,
                 )
             else:
                 raise ValueError(

@@ -111,6 +111,7 @@ class OffloadingConnectorStats(KVConnectorStats):
 class OffloadingConnectorMetadata(KVConnectorMetadata):
     reqs_to_load: dict[ReqId, TransferSpec]
     reqs_to_store: dict[ReqId, TransferSpec]
+    eviction_log: list[dict] | None = None  # Eviction data for visualization
 
 
 class OffloadingConnector(KVConnectorBase_V1):
@@ -530,9 +531,18 @@ class OffloadingConnectorScheduler:
             except Exception:
                 pass  # Non-critical
 
+        # Extract eviction log from manager for visualization/instrumentation
+        eviction_log = None
+        if hasattr(self.manager, 'get_eviction_log'):
+            try:
+                eviction_log = self.manager.get_eviction_log()
+            except Exception:
+                pass  # Non-critical
+
         meta = OffloadingConnectorMetadata(
             reqs_to_load=self._reqs_to_load,
             reqs_to_store=reqs_to_store,
+            eviction_log=eviction_log,
         )
         self._reqs_to_load = {}
 

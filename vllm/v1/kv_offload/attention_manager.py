@@ -33,6 +33,15 @@ class BlockMetadata:
     last_access_time: float = field(default_factory=time.monotonic)
 
 
+@dataclass
+class EvictionRecord:
+    """Record of a block eviction event for instrumentation."""
+    block_hash: str
+    score: float
+    access_count: int
+    timestamp: float
+
+
 class AttentionWeightedOffloadingManager(OffloadingManager):
     """
     An OffloadingManager that evicts blocks with the lowest cumulative
@@ -50,6 +59,7 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
         backend: Backend,
         enable_events: bool = False,
         score_decay: float = 0.95,
+        log_evictions: bool = False,
     ):
         self.backend: Backend = backend
         # block_hash -> BlockMetadata (insertion-ordered)
@@ -59,6 +69,9 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
         )
         # Exponential decay applied to scores each eviction round
         self.score_decay: float = score_decay
+        # Eviction logging for visualization/instrumentation
+        self.log_evictions: bool = log_evictions
+        self.eviction_log: list[EvictionRecord] = [] if log_evictions else []
 
     def update_attention_scores(
         self, scores: dict[BlockHash, float]
@@ -168,8 +181,19 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
                 return None
 
         # Evict selected blocks
+        eviction_time = time.monotonic()
         for block_hash in to_evict:
             meta = self.blocks.pop(block_hash)
+
+            # Log eviction for instrumentation/visualization
+            if self.log_evictions:
+                self.eviction_log.append(EvictionRecord(
+                    block_hash=str(block_hash),
+                    score=meta.cumulative_attention_score,
+                    access_count=meta.access_count,
+                    timestamp=eviction_time,
+                ))
+
             self.backend.free(meta.status)
 
         if to_evict and self.events is not None:
@@ -253,4 +277,43 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
             "ready_blocks": ready,
             "avg_attention_score": avg_score,
             "free_backend_blocks": self.backend.get_num_free_blocks(),
+        }
+
+    def get_eviction_log(self) -> list[dict]:
+        """
+        Return and clear the eviction log for instrumentation.
+
+        Returns:
+            List of eviction records (block_hash, score, access_count, timestamp).
+        """
+        if not self.log_evictions:
+            return []
+
+        log = [
+            {
+                "block_hash": rec.block_hash,
+                "score": rec.score,
+                "access_count": rec.access_count,
+                "timestamp": rec.timestamp,
+            }
+            for rec in self.eviction_log
+        ]
+        self.eviction_log.clear()
+        return log
+
+    def get_block_scores(self) -> dict[str, dict]:
+        """
+        Return current block scores and metadata for all blocks.
+
+        Returns:
+            Dict mapping block_hash -> {score, access_count, is_ready}.
+        """
+        return {
+            str(block_hash): {
+                "score": meta.cumulative_attention_score,
+                "access_count": meta.access_count,
+                "last_access_time": meta.last_access_time,
+                "is_ready": meta.status.is_ready,
+            }
+            for block_hash, meta in self.blocks.items()
         }

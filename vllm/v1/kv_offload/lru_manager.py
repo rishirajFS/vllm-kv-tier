@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+import time
 from collections import OrderedDict
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from vllm.v1.core.kv_cache_utils import BlockHash
 from vllm.v1.kv_offload.abstract import (
@@ -13,16 +15,28 @@ from vllm.v1.kv_offload.abstract import (
 from vllm.v1.kv_offload.backend import Backend, BlockStatus
 
 
+@dataclass
+class EvictionRecord:
+    """Record of a block eviction event for instrumentation."""
+    block_hash: str
+    score: float
+    access_count: int
+    timestamp: float
+
+
 class LRUOffloadingManager(OffloadingManager):
     """
     An OffloadingManager with a pluggable backend, which evicts blocks by LRU.
     """
 
-    def __init__(self, backend: Backend, enable_events: bool = False):
+    def __init__(self, backend: Backend, enable_events: bool = False, log_evictions: bool = False):
         self.backend: Backend = backend
         # block_hash -> BlockStatus
         self.blocks: OrderedDict[BlockHash, BlockStatus] = OrderedDict()
         self.events: list[OffloadingEvent] | None = [] if enable_events else None
+        # Eviction logging for visualization/instrumentation
+        self.log_evictions: bool = log_evictions
+        self.eviction_log: list[EvictionRecord] = [] if log_evictions else []
 
     def lookup(self, block_hashes: Iterable[BlockHash]) -> int | None:
         hit_count = 0
@@ -80,7 +94,17 @@ class LRUOffloadingManager(OffloadingManager):
                 return None
 
         # evict blocks
+        eviction_time = time.monotonic()
         for block_hash in to_evict:
+            # Log eviction for instrumentation/visualization
+            if self.log_evictions:
+                self.eviction_log.append(EvictionRecord(
+                    block_hash=str(block_hash),
+                    score=0.0,  # LRU doesn't use scores
+                    access_count=0,  # LRU doesn't track access count
+                    timestamp=eviction_time,
+                ))
+
             self.backend.free(self.blocks.pop(block_hash))
 
         if to_evict and self.events is not None:
@@ -137,3 +161,25 @@ class LRUOffloadingManager(OffloadingManager):
         if self.events is not None:
             yield from self.events
             self.events.clear()
+
+    def get_eviction_log(self) -> list[dict]:
+        """
+        Return and clear the eviction log for instrumentation.
+
+        Returns:
+            List of eviction records (block_hash, score, access_count, timestamp).
+        """
+        if not self.log_evictions:
+            return []
+
+        log = [
+            {
+                "block_hash": rec.block_hash,
+                "score": rec.score,
+                "access_count": rec.access_count,
+                "timestamp": rec.timestamp,
+            }
+            for rec in self.eviction_log
+        ]
+        self.eviction_log.clear()
+        return log

@@ -25,6 +25,9 @@ set -euo pipefail
 # Environment Setup
 cd ~/workspace/vllm
 source .venv/bin/activate
+export HF_HOME="/jet/home/rnagaraj/workspace/vllm/hf_cache"
+export TRITON_CACHE_DIR="/jet/home/rnagaraj/workspace/vllm/triton_cache"
+export XDG_CACHE_HOME="/jet/home/rnagaraj/workspace/vllm/xdg_cache"
 
 # Configuration
 MODEL="Qwen/Qwen2.5-3B-Instruct"

@@ -37,6 +37,15 @@ class HybridBlockMetadata:
     creation_time: float = field(default_factory=time.monotonic)
 
 
+@dataclass
+class EvictionRecord:
+    """Record of a block eviction event for instrumentation."""
+    block_hash: str
+    score: float
+    access_count: int
+    timestamp: float
+
+
 class HybridOffloadingManager(OffloadingManager):
     """
     An OffloadingManager that uses a weighted combination of attention
@@ -60,6 +69,7 @@ class HybridOffloadingManager(OffloadingManager):
         beta: float = 0.3,
         gamma: float = 0.2,
         score_decay: float = 0.95,
+        log_evictions: bool = False,
     ):
         self.backend: Backend = backend
         self.blocks: OrderedDict[BlockHash, HybridBlockMetadata] = (
@@ -80,6 +90,9 @@ class HybridOffloadingManager(OffloadingManager):
         self.beta: float = beta
         self.gamma: float = gamma
         self.score_decay: float = score_decay
+        # Eviction logging for visualization/instrumentation
+        self.log_evictions: bool = log_evictions
+        self.eviction_log: list[EvictionRecord] = [] if log_evictions else []
 
     def update_attention_scores(
         self, scores: dict[BlockHash, float]
@@ -227,8 +240,19 @@ class HybridOffloadingManager(OffloadingManager):
             if len(to_evict) < num_to_evict:
                 return None
 
+        eviction_time = time.monotonic()
         for block_hash in to_evict:
             meta = self.blocks.pop(block_hash)
+
+            # Log eviction for instrumentation/visualization
+            if self.log_evictions:
+                self.eviction_log.append(EvictionRecord(
+                    block_hash=str(block_hash),
+                    score=meta.cumulative_attention_score,
+                    access_count=meta.access_count,
+                    timestamp=eviction_time,
+                ))
+
             self.backend.free(meta.status)
 
         if to_evict and self.events is not None:
@@ -324,3 +348,25 @@ class HybridOffloadingManager(OffloadingManager):
             },
             "free_backend_blocks": self.backend.get_num_free_blocks(),
         }
+
+    def get_eviction_log(self) -> list[dict]:
+        """
+        Return and clear the eviction log for instrumentation.
+
+        Returns:
+            List of eviction records (block_hash, score, access_count, timestamp).
+        """
+        if not self.log_evictions:
+            return []
+
+        log = [
+            {
+                "block_hash": rec.block_hash,
+                "score": rec.score,
+                "access_count": rec.access_count,
+                "timestamp": rec.timestamp,
+            }
+            for rec in self.eviction_log
+        ]
+        self.eviction_log.clear()
+        return log

@@ -140,6 +140,9 @@ class KVConnectorOutput:
     # magnitudes. Used by attention-aware eviction policies.
     # Format: {block_hash_int -> score}
     attention_block_scores: dict | None = None
+    # Eviction log for visualization/instrumentation
+    # Format: [{block_hash, score, access_count, timestamp}, ...]
+    eviction_log: list[dict] | None = None
 
     def is_empty(self):
         return (
