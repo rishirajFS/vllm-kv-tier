@@ -106,11 +106,11 @@ for task_info in "${TASKS[@]}"; do
     # Run benchmark with all 3 policies
     python benchmark.py \
         --model "$MODEL" \
-        --eviction-policy lru attention hybrid \
+        --policies lru attention hybrid \
         --dataset "longbench_${task}" \
         --dataset-path "$DATASET_FILE" \
-        --num-prompts 200 \
-        --gpu-memory-utilization $GPU_MEM \
+        --num-prompts 39 \
+        --gpu-mem-util $GPU_MEM \
         --max-model-len $MAX_LEN \
         --max-tokens 256 \
         --output "$OUTPUT_FILE"

@@ -142,6 +142,12 @@ def load_prompts(config: BenchmarkConfig) -> list[str]:
     elif config.dataset == "humaneval":
         for item in data:
             prompts.append(item.get("prompt", ""))
+    elif config.dataset.startswith("longbench"):
+        # LongBench-v2 format: list of {"prompt": ..., "expected_output": ..., ...}
+        for item in data:
+            p = item.get("prompt", item.get("question", item.get("input", "")))
+            if p:
+                prompts.append(p)
     else:
         raise ValueError(f"Unknown dataset: {config.dataset}")
 
