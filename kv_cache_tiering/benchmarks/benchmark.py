@@ -88,6 +88,7 @@ def build_kv_connector_config(config: BenchmarkConfig) -> dict:
         "cpu_bytes_to_use": config.cpu_bytes_to_use,
         "block_size": config.block_size,
         "eviction_policy": config.eviction_policy,
+        "log_evictions": True,  # Enable eviction logging for instrumentation
     }
     if config.eviction_policy == "attention":
         extra["score_decay"] = config.score_decay
@@ -143,6 +144,13 @@ def load_prompts(config: BenchmarkConfig) -> list[str]:
             prompts.append(item.get("prompt", ""))
     else:
         raise ValueError(f"Unknown dataset: {config.dataset}")
+
+    # Truncate prompts to fit within max_model_len (leave room for output tokens)
+    # Use a conservative char budget: max_model_len * 3 chars/token, leaving
+    # space for max_tokens output. This avoids VLLMValidationError at generation.
+    max_input_tokens = config.max_model_len - config.max_tokens - 10  # safety margin
+    char_budget = max_input_tokens * 3  # ~3 chars per token heuristic
+    prompts = [p[:char_budget] for p in prompts if p]
 
     return prompts[: config.num_prompts]
 
