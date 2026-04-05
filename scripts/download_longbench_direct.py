@@ -12,6 +12,10 @@ import json
 import os
 from pathlib import Path
 
+# Force real HuggingFace endpoint — Bridges-2 overrides this to a broken mirror
+os.environ["HF_ENDPOINT"] = "https://huggingface.co"
+os.environ["HUGGINGFACE_HUB_URL"] = "https://huggingface.co"
+
 HF_REPO = "THUDM/LongBench-v2"
 
 # LongBench-v2 uses a single split; items have a "domain" field.
