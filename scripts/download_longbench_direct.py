@@ -1,17 +1,112 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 """
-Download LongBench datasets directly via HuggingFace parquet API.
-Bypasses the deprecated dataset script loader in older `datasets` versions.
+Download LongBench datasets via huggingface_hub parquet API.
+Bypasses the deprecated dataset script loader and SSL certificate issues.
 
 Usage:
     python scripts/download_longbench_direct.py --output ~/workspace/vllm/datasets
 """
 import argparse
 import json
-import urllib.request
-import io
-import ssl
+import os
+from pathlib import Path
+
+HF_REPO = "THUDM/LongBench"
+
+TASKS = {
+    "qasper":       {"avg_length": 3619,  "category": "Single-doc QA"},
+    "narrative_qa": {"avg_length": 18409, "category": "Single-doc QA"},
+    "hotpotqa":     {"avg_length": 9151,  "category": "Multi-doc QA"},
+    "multi_news":   {"avg_length": 2113,  "category": "Summarization"},
+}
+
+
+def download_task(task_name, task_info, output_dir, max_samples=200, hf_token=None):
+    """Download a LongBench task via huggingface_hub + parquet."""
+    from huggingface_hub import hf_hub_download
+    import pyarrow.parquet as pq
+
+    output_dir = Path(output_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_file = output_dir / f"longbench_{task_name}.json"
+
+    if out_file.exists():
+        print(f"✅ {task_name}: already cached at {out_file}")
+        return True
+
+    print(f"Downloading {task_name} parquet...")
+    try:
+        # LongBench parquet is stored under refs/convert/parquet branch
+        local_path = hf_hub_download(
+            repo_id=HF_REPO,
+            filename=f"{task_name}/test/0000.parquet",
+            repo_type="dataset",
+            revision="refs/convert/parquet",
+            token=hf_token,
+        )
+        table = pq.read_table(local_path)
+        records = table.to_pylist()
+
+    except Exception as e1:
+        print(f"  parquet branch failed ({e1}), trying main branch json...")
+        try:
+            local_path = hf_hub_download(
+                repo_id=HF_REPO,
+                filename=f"data/{task_name}.jsonl",
+                repo_type="dataset",
+                token=hf_token,
+            )
+            with open(local_path) as f:
+                records = [json.loads(l) for l in f if l.strip()]
+        except Exception as e2:
+            print(f"❌ {task_name}: both attempts failed: {e2}")
+            return False
+
+    prompts = []
+    for item in records[:max_samples]:
+        prompt_text = item.get("input", item.get("context", ""))
+        answers = item.get("answers", [])
+        expected = answers[0] if answers else ""
+        context_length = item.get("length", len(prompt_text.split()))
+        prompts.append({
+            "prompt": prompt_text,
+            "expected_output": expected,
+            "context_length": context_length,
+            "task": task_name,
+            "category": task_info["category"],
+        })
+
+    with open(out_file, "w") as f:
+        json.dump(prompts, f, indent=2)
+
+    avg_len = sum(p["context_length"] for p in prompts) / max(len(prompts), 1)
+    print(f"✅ {task_name}: {len(prompts)} samples, avg {avg_len:.0f} tokens → {out_file}")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", default="~/workspace/vllm/datasets")
+    parser.add_argument("--max-samples", type=int, default=200)
+    parser.add_argument("--hf-token", default=None)
+    args = parser.parse_args()
+
+    token = args.hf_token or os.environ.get("HF_TOKEN")
+
+    success = 0
+    for task, info in TASKS.items():
+        if download_task(task, info, args.output, args.max_samples, token):
+            success += 1
+
+    print(f"\n{'='*60}")
+    print(f"Downloaded {success}/{len(TASKS)} tasks")
+    return 0 if success > 0 else 1
+
+
+if __name__ == "__main__":
+    exit(main())
+
 
 # Bridges-2 has broken CA certs for outbound HTTPS — disable SSL verification
 _SSL_CTX = ssl.create_default_context()
