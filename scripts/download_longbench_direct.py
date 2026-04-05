@@ -11,6 +11,12 @@ import argparse
 import json
 import urllib.request
 import io
+import ssl
+
+# Bridges-2 has broken CA certs for outbound HTTPS — disable SSL verification
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode = ssl.CERT_NONE
 from pathlib import Path
 
 # LongBench parquet files on HuggingFace Hub
@@ -47,7 +53,7 @@ def download_task(task_name, task_info, output_dir, max_samples=200, hf_token=No
 
     try:
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=120, context=_SSL_CTX) as resp:
             raw = resp.read()
 
         # Decompress gzip
