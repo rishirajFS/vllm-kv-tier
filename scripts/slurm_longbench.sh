@@ -43,14 +43,9 @@ cd ~/workspace/vllm/kv_cache_tiering/benchmarks
 # Dataset paths
 DATASET_DIR=~/workspace/vllm/datasets
 
-# Ensure LongBench datasets are downloaded
-echo "Checking LongBench datasets..."
-if [ ! -f "$DATASET_DIR/longbench_qasper.json" ]; then
-    echo "Downloading LongBench datasets via direct URL..."
-    cd ~/workspace/vllm
-    python scripts/download_longbench_direct.py --output $DATASET_DIR --hf-token $HF_TOKEN
-    cd ~/workspace/vllm/kv_cache_tiering/benchmarks
-fi
+# LongBench-v2 datasets pre-loaded via rsync — skip download
+echo "Using pre-loaded LongBench-v2 datasets..."
+ls $DATASET_DIR/longbench_*.json 2>/dev/null || echo "Warning: no longbench datasets found"
 
 # Model to use (Qwen 3B or 7B recommended for long contexts)
 MODEL="Qwen/Qwen2.5-3B-Instruct"
@@ -73,12 +68,14 @@ echo "  Max Model Len: $MAX_LEN"
 echo "  Output: $OUTPUT_DIR"
 echo ""
 
-# LongBench tasks to run (ordered by context length)
+# LongBench-v2 tasks (pre-downloaded via curl from zai-org/LongBench-v2)
 TASKS=(
-    "multi_news:2113"      # Shortest (2K avg)
-    "qasper:3619"          # Medium-short (3.6K avg)
-    "hotpotqa:9151"        # Medium-long (9K avg)
-    "narrative_qa:18409"   # Longest (18K avg)
+    "dialogue_history:44942"    # Shortest (~45K words)
+    "multi_doc_qa:72861"        # Medium (73K words)
+    "single_doc_qa:89544"       # Long (90K words)
+    "long_in_context:108703"    # Very long (109K words)
+    "structured_data:104239"    # Long structured
+    "code_repo:330372"          # Code (330K words)
 )
 
 # Run each task
