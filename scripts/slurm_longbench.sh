@@ -46,9 +46,9 @@ DATASET_DIR=~/workspace/vllm/datasets
 # Ensure LongBench datasets are downloaded
 echo "Checking LongBench datasets..."
 if [ ! -f "$DATASET_DIR/longbench_qasper.json" ]; then
-    echo "Downloading and converting LongBench datasets..."
+    echo "Downloading LongBench datasets via direct URL..."
     cd ~/workspace/vllm
-    python scripts/setup_longbench.py --output $DATASET_DIR --max-samples 200
+    python scripts/download_longbench_direct.py --output $DATASET_DIR --hf-token $HF_TOKEN
     cd ~/workspace/vllm/kv_cache_tiering/benchmarks
 fi
 
