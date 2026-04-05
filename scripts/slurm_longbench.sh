@@ -6,7 +6,7 @@
 #SBATCH --time=8:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=64GB
+#SBATCH --mem=60GB
 #SBATCH --account=cis250224p
 
 # LongBench Benchmark Suite for KV Cache Tiering

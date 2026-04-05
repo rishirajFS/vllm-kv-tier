@@ -57,9 +57,15 @@ def download_and_convert_task(task_name, task_info, output_dir, max_samples=200)
     print(f"{'='*70}\n")
 
     try:
-        # Download from Hugging Face
+        # Download from Hugging Face - use THUDM/LongBench with new API
         print(f"Downloading {task_name} from THUDM/LongBench...")
-        dataset = load_dataset('THUDM/LongBench', task_name, split='test', trust_remote_code=True)
+        # Try new-style parquet-based loading first, fallback to trust_remote_code
+        try:
+            dataset = load_dataset('THUDM/LongBench', task_name, split='test',
+                                   trust_remote_code=True, verification_mode='no_checks')
+        except Exception:
+            dataset = load_dataset('THUDM/LongBench', name=task_name, split='test',
+                                   trust_remote_code=True)
         print(f"✅ Downloaded {len(dataset)} samples")
 
     except Exception as e:
