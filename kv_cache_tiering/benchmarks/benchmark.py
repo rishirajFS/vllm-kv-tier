@@ -151,13 +151,6 @@ def load_prompts(config: BenchmarkConfig) -> list[str]:
     else:
         raise ValueError(f"Unknown dataset: {config.dataset}")
 
-    # Truncate prompts to fit within max_model_len (leave room for output tokens)
-    # Use a conservative char budget: max_model_len * 3 chars/token, leaving
-    # space for max_tokens output. This avoids VLLMValidationError at generation.
-    max_input_tokens = config.max_model_len - config.max_tokens - 10  # safety margin
-    char_budget = max_input_tokens * 3  # ~3 chars per token heuristic
-    prompts = [p[:char_budget] for p in prompts if p]
-
     return prompts[: config.num_prompts]
 
 
@@ -222,7 +215,22 @@ def run_benchmark(config: BenchmarkConfig) -> BenchmarkMetrics:
     )
 
     prompts = load_prompts(config)
-    sampling_params = SamplingParams(max_tokens=config.max_tokens)
+    
+    # Exact truncation using the model's tokenizer to prevent VLLM errors
+    tokenizer = llm.get_tokenizer()
+    max_input_tokens = config.max_model_len - config.max_tokens - 10
+    trunc_prompts = []
+    for p in prompts:
+        tokens = tokenizer.encode(p)
+        if len(tokens) > max_input_tokens:
+            p = tokenizer.decode(tokens[:max_input_tokens])
+        trunc_prompts.append(p)
+    prompts = trunc_prompts
+
+    # ignore_eos=True forces generation to completely saturate max_tokens.
+    # This guarantees the context grows dynamically, consuming KV cache blocks 
+    # until exhaustion, which forces preemption and triggers Tiering evictions.
+    sampling_params = SamplingParams(max_tokens=config.max_tokens, ignore_eos=True)
 
     # Warmup with first 2 prompts
     llm.generate(prompts[:2], sampling_params, use_tqdm=False)
