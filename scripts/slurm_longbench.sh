@@ -50,9 +50,11 @@ ls $DATASET_DIR/longbench_*.json 2>/dev/null || echo "Warning: no longbench data
 # Model to use (Qwen 3B or 7B recommended for long contexts)
 MODEL="Qwen/Qwen2.5-3B-Instruct"
 
-# GPU memory settings (aggressive to force evictions)
-GPU_MEM=0.12
-MAX_LEN=16384  # Support up to 16K contexts
+# GPU memory settings — 0.30 loads Qwen 3B (~6GB) and leaves ~3.6GB for KV cache
+# With 16K-token LongBench prompts this forces evictions after ~5-10 requests
+GPU_MEM=0.30
+CPU_BYTES=4000000000  # 4GB CPU KV cache to absorb evictions
+MAX_LEN=16384  # 16K context to saturate KV cache quickly
 
 # Output directory
 OUTPUT_DIR=~/workspace/vllm/benchmark_results
@@ -109,10 +111,11 @@ for task_info in "${TASKS[@]}"; do
         --policies lru attention hybrid \
         --dataset "longbench_${task}" \
         --dataset-path "$DATASET_FILE" \
-        --num-prompts 39 \
+        --num-prompts 30 \
         --gpu-mem-util $GPU_MEM \
         --max-model-len $MAX_LEN \
         --max-tokens 256 \
+        --cpu-bytes $CPU_BYTES \
         --output "$OUTPUT_FILE"
 
     if [ $? -eq 0 ]; then
