@@ -219,6 +219,60 @@ class OffloadingConnector(KVConnectorBase_V1):
             return None  # We only emit stats from the worker-side
         return self.connector_worker.get_kv_connector_stats()
 
+    def get_eviction_log(self) -> list[dict] | None:
+        """Get eviction log for visualization/instrumentation."""
+        worker = self.connector_worker
+        if worker is None:
+            return None  # Only available from worker-side
+        if hasattr(worker, 'get_eviction_log'):
+            return worker.get_eviction_log()
+        return None
+
+    def get_stats(self) -> dict:
+        """
+        Get comprehensive stats including transfer metrics and eviction data.
+
+        Returns:
+            Dictionary with:
+            - total_evictions: Number of blocks evicted to CPU
+            - bytes_gpu_to_cpu: Total bytes transferred GPU → CPU
+            - bytes_cpu_to_gpu: Total bytes transferred CPU → GPU
+            - avg_transfer_time_gpu_to_cpu_ms: Average transfer time (ms)
+            - avg_transfer_time_cpu_to_gpu_ms: Average transfer time (ms)
+            - Plus manager-specific stats (blocks, scores, etc.)
+        """
+        stats = {
+            "total_evictions": 0,
+            "bytes_gpu_to_cpu": 0,
+            "bytes_cpu_to_gpu": 0,
+            "avg_transfer_time_gpu_to_cpu_ms": 0.0,
+            "avg_transfer_time_cpu_to_gpu_ms": 0.0,
+        }
+
+        # Get transfer stats from worker
+        worker = self.connector_worker
+        if worker:
+            kv_stats = worker.get_kv_connector_stats()
+            if kv_stats:
+                reduced = kv_stats.reduce()
+
+                # Extract bytes transferred
+                stats["bytes_gpu_to_cpu"] = reduced.get("gpu_to_cpu_total_bytes", 0)
+                stats["bytes_cpu_to_gpu"] = reduced.get("cpu_to_gpu_total_bytes", 0)
+
+                # Calculate average transfer times (convert to ms)
+                gpu_to_cpu_time = reduced.get("gpu_to_cpu_total_time", 0.0)
+                cpu_to_gpu_time = reduced.get("cpu_to_gpu_total_time", 0.0)
+                stats["avg_transfer_time_gpu_to_cpu_ms"] = gpu_to_cpu_time * 1000
+                stats["avg_transfer_time_cpu_to_gpu_ms"] = cpu_to_gpu_time * 1000
+
+            # Get manager stats (includes total_evictions after Fix 1)
+            if hasattr(worker, 'manager') and hasattr(worker.manager, 'get_stats'):
+                manager_stats = worker.manager.get_stats()
+                stats.update(manager_stats)
+
+        return stats
+
     @classmethod
     def build_kv_connector_stats(
         cls, data: dict[str, Any] | None = None
@@ -677,6 +731,9 @@ class OffloadingConnectorWorker:
 
         self._finished_reqs_waiting_for_store: set[ReqId] = set()
 
+        # Eviction log from scheduler for visualization/instrumentation
+        self._eviction_log: list[dict] | None = None
+
     def _generate_job_id(self) -> int:
         job_id = self._job_counter
         self._job_counter = job_id + 1
@@ -723,6 +780,9 @@ class OffloadingConnectorWorker:
                 self.worker.wait(job_ids)
 
     def start_kv_transfers(self, metadata: OffloadingConnectorMetadata):
+        # Store eviction log from metadata for later retrieval
+        self._eviction_log = metadata.eviction_log
+
         for job_id, transfer_spec in self._unsubmitted_store_jobs:
             success = self.worker.transfer_async(job_id, transfer_spec)
             assert success
@@ -810,6 +870,14 @@ class OffloadingConnectorWorker:
         kv_connector_stats = self.kv_connector_stats
         self.kv_connector_stats = OffloadingConnectorStats()
         return kv_connector_stats
+
+    def get_eviction_log(self) -> list[dict] | None:
+        """
+        Get and clear the eviction log for visualization/instrumentation.
+        """
+        eviction_log = self._eviction_log
+        self._eviction_log = None
+        return eviction_log
 
 
 class OffloadPromMetrics(KVConnectorPromMetrics):

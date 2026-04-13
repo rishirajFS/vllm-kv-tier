@@ -1,0 +1,26 @@
+[
+  {
+    "model": "Qwen/Qwen2.5-3B-Instruct",
+    "gpu_memory_util": 0.9,
+    "cpu_tier_enabled": false,
+    "cpu_tier_size_gb": 0.0,
+    "max_sequence_length": 20480,
+    "max_batch_size": 1,
+    "time_to_oom_seconds": 244.0646197795868,
+    "peak_gpu_memory_mb": 0.0,
+    "memory_amplification": 1.0,
+    "notes": "Baseline: GPU-only, no CPU tiering"
+  },
+  {
+    "model": "Qwen/Qwen2.5-3B-Instruct",
+    "gpu_memory_util": 0.25,
+    "cpu_tier_enabled": true,
+    "cpu_tier_size_gb": 7.450580596923828,
+    "max_sequence_length": 20480,
+    "max_batch_size": 1,
+    "time_to_oom_seconds": 289.9460458755493,
+    "peak_gpu_memory_mb": 0.0,
+    "memory_amplification": 1.0,
+    "notes": "Tiered: 12% GPU + CPU tier with attention-aware eviction"
+  }
+]

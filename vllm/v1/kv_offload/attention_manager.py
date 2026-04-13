@@ -72,6 +72,8 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
         # Eviction logging for visualization/instrumentation
         self.log_evictions: bool = log_evictions
         self.eviction_log: list[EvictionRecord] = [] if log_evictions else []
+        # Total evictions counter for stats
+        self._total_evictions: int = 0
 
     def update_attention_scores(
         self, scores: dict[BlockHash, float]
@@ -194,6 +196,9 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
                     timestamp=eviction_time,
                 ))
 
+            # Increment eviction counter
+            self._total_evictions += 1
+
             self.backend.free(meta.status)
 
         if to_evict and self.events is not None:
@@ -277,6 +282,7 @@ class AttentionWeightedOffloadingManager(OffloadingManager):
             "ready_blocks": ready,
             "avg_attention_score": avg_score,
             "free_backend_blocks": self.backend.get_num_free_blocks(),
+            "total_evictions": self._total_evictions,
         }
 
     def get_eviction_log(self) -> list[dict]:

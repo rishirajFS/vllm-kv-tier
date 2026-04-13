@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH --job-name=50pct_gpu
+#SBATCH --output=week1_50pct_%j.out
+#SBATCH --partition=GPU-shared
+#SBATCH --gres=gpu:v100-32:1
+#SBATCH --time=2:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32GB
+#SBATCH --account=cis250224p
+
+set -e
+
+echo "======================================================================="
+echo "WEEK 1 FINAL TEST: 50% GPU Memory"
+echo "======================================================================="
+echo "Job ID: $SLURM_JOB_ID"
+echo "Start time: $(date)"
+
+export HF_HOME=~/workspace/vllm/hf_cache
+export TRITON_CACHE_DIR=~/workspace/vllm/triton_cache
+export XDG_CACHE_HOME=~/workspace/vllm/xdg_cache
+
+source ~/workspace/vllm/.venv/bin/activate
+cd ~/workspace/vllm
+
+python test_50pct_gpu.py
+
+echo ""
+echo "End time: $(date)"
+exit $?

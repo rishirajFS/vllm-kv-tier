@@ -408,7 +408,7 @@ def main():
             prompts,
             policy,
             args.max_tokens,
-            gpu_mem_util=0.12,
+            gpu_mem_util=0.25,
         )
 
         metrics = compare_outputs(baseline_outputs, policy_outputs, policy)
